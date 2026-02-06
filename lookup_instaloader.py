@@ -47,7 +47,7 @@ def login_and_save_session(config: Config):
 
     config.ensure_data_dir()
     L = instaloader.Instaloader(
-        quiet=True,
+        quiet=False,
         download_pictures=False,
         download_videos=False,
         download_video_thumbnails=False,
