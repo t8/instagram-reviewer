@@ -63,9 +63,10 @@ def lookup_graph_api(config: Config, db: CheckpointDB) -> dict:
                 skip_count += 1
 
         pbar.update(len(results))
-        call_pct = usage.get("call_count", "?")
+        call_pct = usage.get("call_count")
+        usage_str = f"{call_pct}%" if call_pct is not None else "N/A"
         pbar.set_postfix_str(
-            f"ok={success_count} skip={skip_count} api={call_pct}%{last_success_msg}"
+            f"ok={success_count} skip={skip_count} api={usage_str}{last_success_msg}"
         )
 
         if batch_had_rate_limit:
@@ -81,9 +82,9 @@ def lookup_graph_api(config: Config, db: CheckpointDB) -> dict:
             consecutive_rate_limits = 0
 
         delay = _delay_from_usage(usage)
-        if delay > 0:
-            pbar.write(f"  API usage: {call_pct}% — waiting {delay}s")
-            time.sleep(delay)
+        if delay >= 20:
+            pbar.write(f"  API usage: {usage_str} — waiting {delay}s")
+        time.sleep(delay)
 
     pbar.close()
 
@@ -189,23 +190,54 @@ def _parse_sub_response(follower: Follower, sub_resp: dict):
 
 
 def _parse_usage_header(resp: requests.Response) -> dict:
-    """Parse the X-App-Usage header from a Graph API response."""
+    """Parse rate limit usage from Graph API response headers.
+
+    Checks both X-App-Usage (simple format) and
+    X-Business-Use-Case-Usage (nested format used by batch/Instagram endpoints).
+    Returns dict with 'call_count' key (0-100 percentage).
+    """
+    # Try X-App-Usage first (simple: {"call_count": 28, ...})
     header = resp.headers.get("x-app-usage", "")
-    if not header:
-        return {}
-    try:
-        return json.loads(header)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+    if header:
+        try:
+            data = json.loads(header)
+            if "call_count" in data:
+                return data
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Try X-Business-Use-Case-Usage (nested: {"biz_id": [{"call_count": 28, ...}]})
+    header = resp.headers.get("x-business-use-case-usage", "")
+    if header:
+        try:
+            data = json.loads(header)
+            for _biz_id, entries in data.items():
+                if isinstance(entries, list) and entries:
+                    return entries[0]
+                if isinstance(entries, dict) and "call_count" in entries:
+                    return entries
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return {}
+
+
+# Default delay when no usage header is available — conservative but
+# still much faster than the old fixed 17-21s per-request delay.
+_DEFAULT_NO_HEADER_DELAY = 10.0
 
 
 def _delay_from_usage(usage: dict) -> float:
     """Calculate how long to wait based on API usage percentage.
 
-    X-App-Usage.call_count is the percentage of rate limit used (0-100).
+    call_count is the percentage of rate limit used (0-100).
     We throttle progressively as we approach the limit.
+    If no usage data is available, use a conservative default.
     """
-    call_count = usage.get("call_count", 0)
+    if not usage or "call_count" not in usage:
+        return _DEFAULT_NO_HEADER_DELAY
+
+    call_count = usage["call_count"]
 
     if call_count >= 95:
         return 300   # 5 min — almost at limit, let it cool down
