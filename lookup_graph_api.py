@@ -45,6 +45,11 @@ def lookup_graph_api(config: Config, db: CheckpointDB) -> dict:
 
         results, usage = _batch_lookup(config, batch)
 
+        # Batch POST often doesn't return usage headers — probe with a
+        # lightweight GET to read the actual rate limit percentage.
+        if not usage or "call_count" not in usage:
+            usage = _probe_usage(config)
+
         batch_had_rate_limit = False
         last_success_msg = ""
         for follower in results:
@@ -187,6 +192,23 @@ def _parse_sub_response(follower: Follower, sub_resp: dict):
 
     follower.lookup_status = LookupStatus.GRAPH_API_MISS
     follower.error_message = f"Graph API: {error_msg}"
+
+
+def _probe_usage(config: Config) -> dict:
+    """Make a lightweight API call to read current rate limit usage.
+
+    The batch POST endpoint doesn't return usage headers, so we
+    probe with a cheap GET to read them. This counts as 1 API call.
+    """
+    try:
+        resp = requests.get(
+            f"{GRAPH_API_BASE}/{config.graph_api_user_id}",
+            params={"fields": "id", "access_token": config.graph_api_token},
+            timeout=10,
+        )
+        return _parse_usage_header(resp)
+    except requests.RequestException:
+        return {}
 
 
 def _parse_usage_header(resp: requests.Response) -> dict:
