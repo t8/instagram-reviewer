@@ -72,9 +72,6 @@ def lookup_graph_api(config: Config, db: CheckpointDB) -> dict:
                 )
             else:
                 fail_count += 1
-                # Mark as PENDING so Instaloader can try later (not FAILED)
-                result.lookup_status = LookupStatus.PENDING
-                db.update_result(result)
                 pbar.set_postfix_str(f"ok={success_count} skip={fail_count}")
 
             pbar.update(1)
@@ -123,13 +120,11 @@ def _lookup_single(config: Config, follower: Follower) -> Follower:
         error_data = resp.json().get("error", {})
         error_msg = error_data.get("message", resp.text[:200])
 
-        follower.lookup_status = LookupStatus.PENDING  # Let Instaloader try
+        follower.lookup_status = LookupStatus.GRAPH_API_MISS
         follower.error_message = f"Graph API: {error_msg}"
-        follower.retry_count += 1
         return follower
 
     except requests.RequestException as e:
-        follower.lookup_status = LookupStatus.PENDING
+        follower.lookup_status = LookupStatus.GRAPH_API_MISS
         follower.error_message = f"Graph API request error: {e}"
-        follower.retry_count += 1
         return follower

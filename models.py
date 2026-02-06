@@ -5,6 +5,7 @@ from typing import Optional
 
 class LookupStatus(Enum):
     PENDING = "pending"
+    GRAPH_API_MISS = "graph_api_miss"  # Not found via Graph API, awaiting Instaloader
     SUCCESS = "success"
     FAILED = "failed"
     RATE_LIMITED = "rate_limited"

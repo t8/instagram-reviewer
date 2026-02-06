@@ -52,7 +52,11 @@ class CheckpointDB:
     def get_pending(
         self, batch_size: int = 100, max_retries: int = 3
     ) -> list[Follower]:
-        """Get a batch of pending followers for lookup."""
+        """Get a batch of pending followers for lookup.
+
+        Only returns PENDING and RATE_LIMITED entries.
+        GRAPH_API_MISS entries are skipped (personal/private accounts).
+        """
         cursor = self._conn.execute(
             """SELECT username, followed_at, follower_count, following_count,
                       full_name, is_verified, is_private, lookup_status,
@@ -62,7 +66,12 @@ class CheckpointDB:
                  AND retry_count < ?
                ORDER BY retry_count ASC, username ASC
                LIMIT ?""",
-            (LookupStatus.PENDING.value, LookupStatus.RATE_LIMITED.value, max_retries, batch_size),
+            (
+                LookupStatus.PENDING.value,
+                LookupStatus.RATE_LIMITED.value,
+                max_retries,
+                batch_size,
+            ),
         )
         return [self._row_to_follower(row) for row in cursor.fetchall()]
 
@@ -117,6 +126,7 @@ class CheckpointDB:
         return {
             "total": total,
             "pending": status_counts.get(LookupStatus.PENDING.value, 0),
+            "graph_api_miss": status_counts.get(LookupStatus.GRAPH_API_MISS.value, 0),
             "success": status_counts.get(LookupStatus.SUCCESS.value, 0),
             "failed": status_counts.get(LookupStatus.FAILED.value, 0),
             "rate_limited": status_counts.get(LookupStatus.RATE_LIMITED.value, 0),

@@ -155,6 +155,7 @@ def _print_stats(stats):
 
     success = stats["success"]
     pending = stats["pending"]
+    graph_api_miss = stats["graph_api_miss"]
     failed = stats["failed"]
     rate_limited = stats["rate_limited"]
     pct = (success / total * 100) if total > 0 else 0
@@ -162,6 +163,7 @@ def _print_stats(stats):
     print(f"\n--- Follower Lookup Progress ---")
     print(f"  Total followers:  {total:,}")
     print(f"  Completed:        {success:,} ({pct:.1f}%)")
+    print(f"  Skipped (personal): {graph_api_miss:,}")
     print(f"  Pending:          {pending:,}")
     print(f"  Rate limited:     {rate_limited:,}")
     print(f"  Failed:           {failed:,}")
