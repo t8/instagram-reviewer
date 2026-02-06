@@ -32,10 +32,10 @@ class Config:
     instaloader_long_pause_interval_min: int = 10  # every 10-20 requests
     instaloader_long_pause_interval_max: int = 20
 
-    # Graph API rate limits
-    graph_api_hourly_cap: int = 180  # under 200/hr limit
-    graph_api_min_delay: float = 1.0
-    graph_api_max_delay: float = 3.0
+    # Graph API rate limits (official API — safe to run near the limit)
+    graph_api_hourly_cap: int = 200  # Instagram Graph API limit
+    graph_api_min_delay: float = 17.0   # spread evenly: 3600/200 = 18s avg
+    graph_api_max_delay: float = 21.0
 
     # Retry settings
     max_retries: int = 3
@@ -62,7 +62,7 @@ def load_config() -> Config:
         instaloader_session_cap=int(os.getenv("INSTALOADER_SESSION_CAP", "150")),
         instaloader_session_rest=float(os.getenv("INSTALOADER_SESSION_REST", "7200")),
         instaloader_daily_cap=int(os.getenv("INSTALOADER_DAILY_CAP", "400")),
-        graph_api_hourly_cap=int(os.getenv("GRAPH_API_HOURLY_CAP", "180")),
+        graph_api_hourly_cap=int(os.getenv("GRAPH_API_HOURLY_CAP", "200")),
     )
     config.ensure_data_dir()
     return config
